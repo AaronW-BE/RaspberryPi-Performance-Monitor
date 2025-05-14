@@ -80,7 +80,7 @@ go get github.com/shirou/gopsutil/v3
 Contributions are welcome! Please fork the repository and submit pull requests with improvements or bug fixes.
 
 ## License
-This project is licensed under the MIT License. See the `LICENSE` file for details (if applicable).
+This project is licensed under the GPL-2.0 License. See the `LICENSE` file for details (if applicable).
 
 ## Acknowledgements
 - Built with [Fiber](https://gofiber.io/) for the web server.
