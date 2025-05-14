@@ -62,8 +62,24 @@
         }
         .core-label {
             font-size: 0.75rem;
-            color: #374151;
             margin-bottom: 5px;
+        }
+
+        /* For dark mode */
+        .dark .core-label {
+            color: #d1d5db;
+        }
+        .dark .bg-white {
+            background-color: #1f2937;
+        }
+        .dark .text-gray-500 {
+            color: #9ca3af;
+        }
+        .dark .text-gray-500:hover {
+            color: #d1d5db;
+        }
+        .dark .bg-gray-200 {
+            background-color: #4b5563;
         }
     </style>
 </head>
@@ -204,32 +220,52 @@
 </div>
 
 <script>
+    function createChartConfig(type, labels, datasets, yMax) {
+        return {
+            type: type,
+            data: { labels: labels, datasets: datasets },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: yMax,
+                        grid: {
+                            color: () => document.body.classList.contains('dark') ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                        },
+                        ticks: {
+                            color: () => document.body.classList.contains('dark') ? '#d1d5db' : '#000000'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: () => document.body.classList.contains('dark') ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                        },
+                        ticks: {
+                            color: () => document.body.classList.contains('dark') ? '#d1d5db' : '#000000'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            font: { size: 12 },
+                            color: () => document.body.classList.contains('dark') ? '#d1d5db' : '#000000'
+                        }
+                    }
+                }
+            }
+        };
+    }
+
     const charts = {
-        cpu: new Chart(document.getElementById('cpuChart').getContext('2d'), {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'CPU Usage (%)', data: [], borderColor: 'blue', fill: false }] },
-            options: { scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { labels: { font: { size: 12 } } } } }
-        }),
-        memory: new Chart(document.getElementById('memoryChart').getContext('2d'), {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Memory Usage (%)', data: [], borderColor: 'green', fill: false }] },
-            options: { scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { labels: { font: { size: 12 } } } } }
-        }),
-        disk: new Chart(document.getElementById('diskChart').getContext('2d'), {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Disk Read (KB/s)', data: [], borderColor: 'purple', fill: false }, { label: 'Disk Write (KB/s)', data: [], borderColor: 'orange', fill: false }] },
-            options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { labels: { font: { size: 12 } } } } }
-        }),
-        temperature: new Chart(document.getElementById('temperatureChart').getContext('2d'), {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'CPU Temperature', data: [], borderColor: 'red', fill: false }] },
-            options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { labels: { font: { size: 12 } } } } }
-        }),
-        fan: new Chart(document.getElementById('fanChart').getContext('2d'), {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Fan Speed (RPM)', data: [], borderColor: 'orange', fill: false }] },
-            options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { labels: { font: { size: 12 } } } } }
-        })
+        cpu: new Chart(document.getElementById('cpuChart').getContext('2d'), createChartConfig('line', [], [{ label: 'CPU Usage (%)', data: [], borderColor: 'blue', fill: false }], 100)),
+        memory: new Chart(document.getElementById('memoryChart').getContext('2d'), createChartConfig('line', [], [{ label: 'Memory Usage (%)', data: [], borderColor: 'green', fill: false }], 100)),
+        disk: new Chart(document.getElementById('diskChart').getContext('2d'), createChartConfig('line', [], [
+            { label: 'Disk Read (KB/s)', data: [], borderColor: 'purple', fill: false },
+            { label: 'Disk Write (KB/s)', data: [], borderColor: 'orange', fill: false }
+        ], null)),
+        temperature: new Chart(document.getElementById('temperatureChart').getContext('2d'), createChartConfig('line', [], [{ label: 'CPU Temperature', data: [], borderColor: 'red', fill: false }], null)),
+        fan: new Chart(document.getElementById('fanChart').getContext('2d'), createChartConfig('line', [], [{ label: 'Fan Speed (RPM)', data: [], borderColor: 'orange', fill: false }], null))
     };
 
     let settings = { refreshRate: 1, dataPoints: 20, tempUnit: 'celsius', theme: 'light' };
@@ -242,8 +278,9 @@
         document.getElementById('refreshRate').value = settings.refreshRate;
         document.getElementById('dataPoints').value = settings.dataPoints;
         document.getElementById('tempUnit').value = settings.tempUnit;
-        document.body.className = settings.theme === 'light' ? 'bg-gray-100 font-sans' : 'bg-gray-900 text-white font-sans';
+        document.body.className = settings.theme === 'light' ? 'bg-gray-100 font-sans' : 'bg-gray-900 text-white font-sans dark';
         updateThemeIcon();
+        updateChartsTheme();
     }
 
     function saveSettings() {
@@ -252,13 +289,30 @@
 
     function toggleTheme() {
         settings.theme = settings.theme === 'light' ? 'dark' : 'light';
-        document.body.className = settings.theme === 'light' ? 'bg-gray-100 font-sans' : 'bg-gray-900 text-white font-sans';
+        document.body.className = settings.theme === 'light' ? 'bg-gray-100 font-sans' : 'bg-gray-900 text-white font-sans dark';
         updateThemeIcon();
+        updateChartsTheme();
         saveSettings();
     }
 
     function updateThemeIcon() {
         document.getElementById('themeIcon').className = settings.theme === 'light' ? 'fas fa-moon text-white' : 'fas fa-sun text-white';
+    }
+
+    function updateChartsTheme() {
+        Object.values(charts).forEach(chart => {
+            chart.options.scales.y.grid.color = document.body.classList.contains('dark') ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            chart.options.scales.x.grid.color = document.body.classList.contains('dark') ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            chart.options.scales.y.ticks.color = document.body.classList.contains('dark') ? '#d1d5db' : '#000000';
+            chart.options.scales.x.ticks.color = document.body.classList.contains('dark') ? '#d1d5db' : '#000000';
+            chart.options.plugins.legend.labels.color = document.body.classList.contains('dark') ? '#d1d5db' : '#000000';
+            chart.update();
+        });
+        cpuCoreCharts.forEach(chart => {
+            chart.options.scales.y.grid.color = document.body.classList.contains('dark') ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            chart.options.scales.y.ticks.color = document.body.classList.contains('dark') ? '#d1d5db' : '#000000';
+            chart.update();
+        });
     }
 
     function showToast() {
@@ -341,7 +395,14 @@
                     }]
                 },
                 options: {
-                    scales: { y: { beginAtZero: true, max: 100 } },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: { color: document.body.classList.contains('dark') ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)' },
+                            ticks: { color: document.body.classList.contains('dark') ? '#d1d5db' : '#000000' }
+                        }
+                    },
                     plugins: { legend: { display: false } }
                 }
             });
@@ -409,7 +470,6 @@
                 charts.fan.data.labels.push(time);
                 charts.fan.data.datasets[0].data.push(data.fan && data.fan.fan_rpm !== undefined ? data.fan.fan_rpm : 0);
 
-                // Update CPU Core Charts
                 if (data.cpu_percent && data.cpu_percent.length > 0) {
                     if (cpuCoreCharts.length !== data.cpu_percent.length) {
                         createCpuCoreCharts(data.cpu_percent.length);
