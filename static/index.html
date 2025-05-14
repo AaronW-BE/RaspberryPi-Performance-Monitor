@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raspberry Pi Performance Monitor</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .button-group {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 20;
+            display: flex;
+            gap: 0.5rem;
+        }
+        @media (max-width: 640px) {
+            .button-group {
+                top: 0.5rem;
+                right: 0.5rem;
+            }
+        }
+        .custom-btn {
+            width: 2.5rem;
+            height: 2.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #3b82f6;
+            border-radius: 9999px;
+            overflow: hidden;
+            transition: background-color 0.3s;
+        }
+        .custom-btn:hover {
+            background-color: #2563eb;
+        }
+        .progress-bar {
+            height: 1.5rem;
+            border-radius: 0.5rem;
+            transition: width 0.3s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.875rem;
+        }
+        .warning {
+            border: 2px solid #f87171;
+        }
+        .core-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 5px;
+        }
+        .cpu-core-chart {
+            height: 60px;
+            margin-top: 10px;
+            padding: 5px;
+        }
+        .core-label {
+            font-size: 0.75rem;
+            color: #374151;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+<main class="container mx-auto p-4 max-w-7xl">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold">Raspberry Pi Performance Monitor</h1>
+        <div class="button-group">
+            <button onclick="openSettingsModal()" class="custom-btn">
+                <i class="fas fa-cog text-white"></i>
+            </button>
+            <button onclick="toggleTheme()" class="custom-btn">
+                <i id="themeIcon" class="fas fa-moon text-white"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Data Panels -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        <div class="bg-white p-4 rounded shadow">
+            <h2 class="text-lg font-semibold"><i class="fas fa-microchip mr-2"></i>CPU</h2>
+            <p class="text-sm">Overall: <span id="cpu_overall">0</span>%</p>
+            <div class="w-full bg-gray-200 rounded-lg mt-2">
+                <div id="cpu_progress" class="progress-bar bg-blue-500 w-0"><span>0%</span></div>
+            </div>
+            <button onclick="toggleCpuDetails()" class="text-blue-500 text-sm mt-2">Expand/Collapse Core Details</button>
+            <div id="cpuDetails" class="hidden mt-2">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" id="coreContainer">
+                    <!-- CPU Core Charts will be dynamically inserted here -->
+                </div>
+            </div>
+        </div>
+        <div class="bg-white p-4 rounded shadow">
+            <h2 class="text-lg font-semibold"><i class="fas fa-memory mr-2"></i>Memory</h2>
+            <p class="text-sm">Used/Total: <span id="memory_used">0</span>/<span id="memory_total">0</span> MB</p>
+            <div class="w-full bg-gray-200 rounded-lg mt-2">
+                <div id="memory_progress" class="progress-bar bg-green-500 w-0"><span>0%</span></div>
+            </div>
+        </div>
+        <div class="bg-white p-4 rounded shadow">
+            <h2 class="text-lg font-semibold"><i class="fas fa-hdd mr-2"></i>Disk</h2>
+            <p class="text-sm">Used/Total: <span id="disk_used">0</span>/<span id="disk_total">0</span> GB</p>
+            <div class="w-full bg-gray-200 rounded-lg mt-2">
+                <div id="disk_progress" class="progress-bar bg-purple-500 w-0"><span>0%</span></div>
+            </div>
+        </div>
+        <div class="bg-white p-4 rounded shadow">
+            <h2 class="text-lg font-semibold"><i class="fas fa-exchange-alt mr-2"></i>Disk I/O</h2>
+            <p class="text-sm">Read: <span id="disk_read_bytes">0</span> KB/s</p>
+            <p class="text-sm">Write: <span id="disk_write_bytes">0</span> KB/s</p>
+        </div>
+        <div class="bg-white p-4 rounded shadow">
+            <h2 class="text-lg font-semibold"><i class="fas fa-network-wired mr-2"></i>Network</h2>
+            <p class="text-sm">Sent: <span id="net_sent_bytes">0</span> KB/s</p>
+            <p class="text-sm">Received: <span id="net_recv_bytes">0</span> KB/s</p>
+        </div>
+        <div id="systemPanel" class="bg-white p-4 rounded shadow">
+            <h2 class="text-lg font-semibold"><i class="fas fa-thermometer-half mr-2"></i>System</h2>
+            <p class="text-sm">Temperature: <span id="temperature">0</span><span id="temp_unit">°C</span></p>
+            <p class="text-sm">Uptime: <span id="uptime">0</span> seconds</p>
+        </div>
+        <div id="fanPanel" class="bg-white p-4 rounded shadow">
+            <h2 class="text-lg font-semibold"><i class="fas fa-fan mr-2"></i>Fan</h2>
+            <p class="text-sm">Status: <span id="fan_state">Unknown</span></p>
+            <p class="text-sm">RPM: <span id="fan_rpm">0</span></p>
+            <div class="w-full bg-gray-200 rounded-lg mt-2">
+                <div id="fan_pwm_progress" class="progress-bar bg-orange-500 w-0"><span>0%</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="bg-white p-4 rounded shadow">
+            <canvas id="cpuChart"></canvas>
+        </div>
+        <div class="bg-white p-4 rounded shadow">
+            <canvas id="memoryChart"></canvas>
+        </div>
+        <div class="bg-white p-4 rounded shadow">
+            <canvas id="diskChart"></canvas>
+        </div>
+        <div class="bg-white p-4 rounded shadow">
+            <canvas id="temperatureChart"></canvas>
+        </div>
+        <div class="bg-white p-4 rounded shadow">
+            <canvas id="fanChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg opacity-0">
+        Settings Saved
+    </div>
+</main>
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold">Monitor Settings</h2>
+            <button onclick="closeSettingsModal()" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium">Refresh Rate (seconds)</label>
+                <select id="refreshRate" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                    <option value="1">1 second</option>
+                    <option value="2">2 seconds</option>
+                    <option value="5">5 seconds</option>
+                    <option value="10">10 seconds</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium">Chart Data Points</label>
+                <select id="dataPoints" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium">Temperature Unit</label>
+                <select id="tempUnit" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                    <option value="celsius">Celsius (°C)</option>
+                    <option value="fahrenheit">Fahrenheit (°F)</option>
+                </select>
+            </div>
+        </div>
+        <div class="mt-6 flex justify-end">
+            <button onclick="applySettings()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+                Save
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const charts = {
+        cpu: new Chart(document.getElementById('cpuChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'CPU Usage (%)', data: [], borderColor: 'blue', fill: false }] },
+            options: { scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { labels: { font: { size: 12 } } } } }
+        }),
+        memory: new Chart(document.getElementById('memoryChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Memory Usage (%)', data: [], borderColor: 'green', fill: false }] },
+            options: { scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { labels: { font: { size: 12 } } } } }
+        }),
+        disk: new Chart(document.getElementById('diskChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Disk Read (KB/s)', data: [], borderColor: 'purple', fill: false }, { label: 'Disk Write (KB/s)', data: [], borderColor: 'orange', fill: false }] },
+            options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { labels: { font: { size: 12 } } } } }
+        }),
+        temperature: new Chart(document.getElementById('temperatureChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'CPU Temperature', data: [], borderColor: 'red', fill: false }] },
+            options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { labels: { font: { size: 12 } } } } }
+        }),
+        fan: new Chart(document.getElementById('fanChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Fan Speed (RPM)', data: [], borderColor: 'orange', fill: false }] },
+            options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { labels: { font: { size: 12 } } } } }
+        })
+    };
+
+    let settings = { refreshRate: 1, dataPoints: 20, tempUnit: 'celsius', theme: 'light' };
+    let intervalId = null;
+    let cpuCoreCharts = [];
+
+    function loadSettings() {
+        const saved = localStorage.getItem('monitorSettings');
+        if (saved) settings = JSON.parse(saved);
+        document.getElementById('refreshRate').value = settings.refreshRate;
+        document.getElementById('dataPoints').value = settings.dataPoints;
+        document.getElementById('tempUnit').value = settings.tempUnit;
+        document.body.className = settings.theme === 'light' ? 'bg-gray-100 font-sans' : 'bg-gray-900 text-white font-sans';
+        updateThemeIcon();
+    }
+
+    function saveSettings() {
+        localStorage.setItem('monitorSettings', JSON.stringify(settings));
+    }
+
+    function toggleTheme() {
+        settings.theme = settings.theme === 'light' ? 'dark' : 'light';
+        document.body.className = settings.theme === 'light' ? 'bg-gray-100 font-sans' : 'bg-gray-900 text-white font-sans';
+        updateThemeIcon();
+        saveSettings();
+    }
+
+    function updateThemeIcon() {
+        document.getElementById('themeIcon').className = settings.theme === 'light' ? 'fas fa-moon text-white' : 'fas fa-sun text-white';
+    }
+
+    function showToast() {
+        const toast = document.getElementById('toast');
+        toast.classList.remove('opacity-0');
+        setTimeout(() => toast.classList.add('opacity-0'), 2000);
+    }
+
+    function openSettingsModal() {
+        document.getElementById('settingsModal').classList.remove('hidden');
+    }
+
+    function closeSettingsModal() {
+        document.getElementById('settingsModal').classList.add('hidden');
+    }
+
+    function applySettings() {
+        const refreshRate = parseInt(document.getElementById('refreshRate').value);
+        const dataPoints = parseInt(document.getElementById('dataPoints').value);
+        const tempUnit = document.getElementById('tempUnit').value;
+
+        if (refreshRate < 1 || dataPoints < 10) {
+            alert('Refresh rate must be ≥ 1 second, data points must be ≥ 10');
+            return;
+        }
+
+        settings.refreshRate = refreshRate;
+        settings.dataPoints = dataPoints;
+        settings.tempUnit = tempUnit;
+
+        saveSettings();
+        restartUpdateInterval();
+        updateTempUnitLabel();
+        closeSettingsModal();
+        showToast();
+    }
+
+    function updateTempUnitLabel() {
+        const unit = settings.tempUnit === 'celsius' ? '°C' : '°F';
+        document.getElementById('temp_unit').textContent = unit;
+        charts.temperature.data.datasets[0].label = `CPU Temperature (${unit})`;
+        charts.temperature.update();
+    }
+
+    function restartUpdateInterval() {
+        if (intervalId) clearInterval(intervalId);
+        intervalId = setInterval(updateMetrics, settings.refreshRate * 1000);
+    }
+
+    function toggleCpuDetails() {
+        const details = document.getElementById('cpuDetails');
+        details.classList.toggle('hidden');
+    }
+
+    function createCpuCoreCharts(coreCount) {
+        const container = document.getElementById('coreContainer');
+        container.innerHTML = '';
+        cpuCoreCharts = [];
+        for (let i = 0; i < coreCount; i++) {
+            const coreDiv = document.createElement('div');
+            coreDiv.className = 'core-container';
+            const label = document.createElement('div');
+            label.className = 'core-label';
+            label.textContent = `Core ${i + 1}`;
+            const canvas = document.createElement('canvas');
+            canvas.className = 'cpu-core-chart';
+            coreDiv.appendChild(label);
+            coreDiv.appendChild(canvas);
+            container.appendChild(coreDiv);
+            const chart = new Chart(canvas.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: [''],
+                    datasets: [{
+                        label: `Core ${i + 1}`,
+                        data: [0],
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: { y: { beginAtZero: true, max: 100 } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+            cpuCoreCharts.push(chart);
+        }
+    }
+
+    function updateMetrics() {
+        fetch('/metrics')
+            .then(response => response.json())
+            .then(data => {
+                if (!data || !data.cpu_overall || !data.memory_percent) {
+                    console.error('Invalid metrics data');
+                    return;
+                }
+
+                let temp = data.temperature || 0;
+                if (settings.tempUnit === 'fahrenheit') temp = (temp * 9 / 5) + 32;
+
+                document.getElementById('cpu_overall').textContent = data.cpu_overall.toFixed(1);
+                document.getElementById('cpu_progress').style.width = `${data.cpu_overall}%`;
+                document.getElementById('cpu_progress').querySelector('span').textContent = `${data.cpu_overall.toFixed(1)}%`;
+                document.getElementById('memory_total').textContent = data.memory_total || 0;
+                document.getElementById('memory_used').textContent = data.memory_used || 0;
+                document.getElementById('memory_progress').style.width = `${data.memory_percent || 0}%`;
+                document.getElementById('memory_progress').querySelector('span').textContent = `${(data.memory_percent || 0).toFixed(1)}%`;
+                document.getElementById('disk_total').textContent = data.disk_total || 0;
+                document.getElementById('disk_used').textContent = data.disk_used || 0;
+                document.getElementById('disk_progress').style.width = `${data.disk_percent || 0}%`;
+                document.getElementById('disk_progress').querySelector('span').textContent = `${(data.disk_percent || 0).toFixed(1)}%`;
+                document.getElementById('disk_read_bytes').textContent = data.disk_read_bytes || 0;
+                document.getElementById('disk_write_bytes').textContent = data.disk_write_bytes || 0;
+                document.getElementById('net_sent_bytes').textContent = data.net_sent_bytes || 0;
+                document.getElementById('net_recv_bytes').textContent = data.net_recv_bytes || 0;
+                document.getElementById('temperature').textContent = temp.toFixed(1);
+                document.getElementById('uptime').textContent = data.uptime || 0;
+
+                let fanState = 'Unknown';
+                if (data.fan && typeof data.fan.fan_state === 'string') {
+                    if (data.fan.fan_state === 'running') fanState = 'Running';
+                    else if (data.fan.fan_state === 'stopped') fanState = 'Stopped';
+                    else fanState = 'Error';
+                }
+                document.getElementById('fan_state').textContent = fanState;
+                document.getElementById('fan_rpm').textContent = data.fan && data.fan.fan_rpm !== undefined ? data.fan.fan_rpm : 0;
+                const fanPwm = data.fan && data.fan.fan_pwm !== undefined ? data.fan.fan_pwm : 0;
+                document.getElementById('fan_pwm_progress').style.width = `${(fanPwm / 255) * 100}%`;
+                document.getElementById('fan_pwm_progress').querySelector('span').textContent = `${((fanPwm / 255) * 100).toFixed(1)}%`;
+
+                const systemPanel = document.getElementById('systemPanel');
+                systemPanel.classList.toggle('warning', temp > 80);
+                const fanPanel = document.getElementById('fanPanel');
+                fanPanel.classList.toggle('warning', fanState === 'Stopped' && temp > 50);
+
+                const time = new Date((data.timestamp || 0) * 1000).toLocaleTimeString();
+                charts.cpu.data.labels.push(time);
+                charts.cpu.data.datasets[0].data.push(data.cpu_overall || 0);
+                charts.memory.data.labels.push(time);
+                charts.memory.data.datasets[0].data.push(data.memory_percent || 0);
+                charts.disk.data.labels.push(time);
+                charts.disk.data.datasets[0].data.push(data.disk_read_bytes || 0);
+                charts.disk.data.datasets[1].data.push(data.disk_write_bytes || 0);
+                charts.temperature.data.labels.push(time);
+                charts.temperature.data.datasets[0].data.push(temp);
+                charts.fan.data.labels.push(time);
+                charts.fan.data.datasets[0].data.push(data.fan && data.fan.fan_rpm !== undefined ? data.fan.fan_rpm : 0);
+
+                // Update CPU Core Charts
+                if (data.cpu_percent && data.cpu_percent.length > 0) {
+                    if (cpuCoreCharts.length !== data.cpu_percent.length) {
+                        createCpuCoreCharts(data.cpu_percent.length);
+                    }
+                    data.cpu_percent.forEach((usage, index) => {
+                        if (cpuCoreCharts[index]) {
+                            cpuCoreCharts[index].data.datasets[0].data = [usage];
+                            cpuCoreCharts[index].update();
+                        }
+                    });
+                }
+
+                for (const chart of Object.values(charts)) {
+                    while (chart.data.labels.length > settings.dataPoints) {
+                        chart.data.labels.shift();
+                        chart.data.datasets.forEach(d => d.data.shift());
+                    }
+                    chart.update();
+                }
+            })
+            .catch(error => {
+                console.error('Failed to fetch data:', error);
+            });
+    }
+
+    window.onload = function() {
+        loadSettings();
+        restartUpdateInterval();
+        updateMetrics();
+    };
+</script>
+</body>
+</html>
