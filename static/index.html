@@ -64,8 +64,6 @@
             font-size: 0.75rem;
             margin-bottom: 5px;
         }
-
-        /* For dark mode */
         .dark .core-label {
             color: #d1d5db;
         }
@@ -187,6 +185,10 @@
         </div>
         <div class="space-y-4">
             <div>
+                <label class="block text-sm font-medium">Metrics Endpoint</label>
+                <input id="metricsEndpoint" type="text" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" value="/metrics" placeholder="/metrics">
+            </div>
+            <div>
                 <label class="block text-sm font-medium">Refresh Rate (seconds)</label>
                 <select id="refreshRate" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
                     <option value="1">1 second</option>
@@ -268,13 +270,26 @@
         fan: new Chart(document.getElementById('fanChart').getContext('2d'), createChartConfig('line', [], [{ label: 'Fan Speed (RPM)', data: [], borderColor: 'orange', fill: false }], null))
     };
 
-    let settings = { refreshRate: 1, dataPoints: 20, tempUnit: 'celsius', theme: 'light' };
+    let settings = {
+        metricsEndpoint: '/metrics',
+        refreshRate: 1,
+        dataPoints: 20,
+        tempUnit: 'celsius',
+        theme: 'light'
+    };
     let intervalId = null;
     let cpuCoreCharts = [];
 
     function loadSettings() {
         const saved = localStorage.getItem('monitorSettings');
-        if (saved) settings = JSON.parse(saved);
+        if (saved) {
+            settings = JSON.parse(saved);
+        }
+        // 确保 metricsEndpoint 始终有默认值
+        if (!settings.metricsEndpoint || settings.metricsEndpoint.trim() === '') {
+            settings.metricsEndpoint = '/metrics';
+        }
+        document.getElementById('metricsEndpoint').value = settings.metricsEndpoint;
         document.getElementById('refreshRate').value = settings.refreshRate;
         document.getElementById('dataPoints').value = settings.dataPoints;
         document.getElementById('tempUnit').value = settings.tempUnit;
@@ -330,15 +345,21 @@
     }
 
     function applySettings() {
+        const metricsEndpoint = document.getElementById('metricsEndpoint').value.trim();
         const refreshRate = parseInt(document.getElementById('refreshRate').value);
         const dataPoints = parseInt(document.getElementById('dataPoints').value);
         const tempUnit = document.getElementById('tempUnit').value;
 
+        if (metricsEndpoint === '') {
+            alert('Metrics endpoint cannot be empty');
+            return;
+        }
         if (refreshRate < 1 || dataPoints < 10) {
             alert('Refresh rate must be ≥ 1 second, data points must be ≥ 10');
             return;
         }
 
+        settings.metricsEndpoint = metricsEndpoint;
         settings.refreshRate = refreshRate;
         settings.dataPoints = dataPoints;
         settings.tempUnit = tempUnit;
@@ -411,7 +432,7 @@
     }
 
     function updateMetrics() {
-        fetch('/metrics')
+        fetch(settings.metricsEndpoint)
             .then(response => response.json())
             .then(data => {
                 if (!data || !data.cpu_overall || !data.memory_percent) {
@@ -491,7 +512,7 @@
                 }
             })
             .catch(error => {
-                console.error('Failed to fetch data:', error);
+                console.error('Failed to fetch data from ' + settings.metricsEndpoint + ':', error);
             });
     }
 
