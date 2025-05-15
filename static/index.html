@@ -435,7 +435,7 @@
         fetch(settings.metricsEndpoint)
             .then(response => response.json())
             .then(data => {
-                if (!data || !data.cpu_overall || !data.memory_percent) {
+                if (!data || !data.hasOwnProperty('cpu_overall') || !data.hasOwnProperty('memory_percent')) {
                     console.error('Invalid metrics data');
                     return;
                 }
